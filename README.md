@@ -31,4 +31,11 @@ npm run dev
 3. Wait for processing (you'll see a success message)
 4. Start asking questions about your PDF content
 
+SAMPLE USAGE
+PDF Chat Bot Interface
+![Step 1](sample_images/sample_image_1.jpg)
+![Step 2](sample_images/sample_image_2.jpg)
+![Step 3](sample_images/sample_image_3.jpg)
+![Step 4](sample_images/sample_image_4.jpg)
+![](sample_images/sample_image_5.jpg)
 

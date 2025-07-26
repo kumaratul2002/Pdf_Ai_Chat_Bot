@@ -173,8 +173,8 @@ const config = {
   qdrantUrl: process.env.QDRANT_URL || "http://localhost:6333",
   geminiApiKey: process.env.GEMINI_API_KEY,
   uploadDir: process.env.UPLOAD_DIR || "uploads/",
-  chunkSize: parseInt(process.env.CHUNK_SIZE) || 1000,
-  chunkOverlap: parseInt(process.env.CHUNK_OVERLAP) || 400,
+  chunkSize: parseInt(process.env.CHUNK_SIZE) || 2000,
+  chunkOverlap: parseInt(process.env.CHUNK_OVERLAP) || 200,
 };
 
 const PORT = config.port;
@@ -185,7 +185,7 @@ app.use(express.json());
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (!fs.existsSync(config.uploadDir)) {
-      fs.mkdirSync(config.uploadDir, { recursive: true });//nested folders allowed
+      fs.mkdirSync(config.uploadDir, { recursive: true }); //nested folders allowed
     }
     cb(null, config.uploadDir);
   },
@@ -236,7 +236,8 @@ const initializeAI = async () => {
   }
 };
 
-app.post("/api/upload-pdf", upload.single("pdf"), async (req, res) => { //multer attaches pdf file to req.file
+app.post("/api/upload-pdf", upload.single("pdf"), async (req, res) => {
+  //multer attaches pdf file to req.file
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No PDF file uploaded" });
@@ -244,7 +245,7 @@ app.post("/api/upload-pdf", upload.single("pdf"), async (req, res) => { //multer
     vectorStore = null;
     await initializeAI();
     const loader = new PDFLoader(req.file.path); //loads the pdf from that path create a loader instance
-    const docs = await loader.load();//extracts text line by line and returns in langchain compitable document
+    const docs = await loader.load(); //extracts text line by line and returns in langchain compitable document
     //text chunking utility from langchain
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: config.chunkSize,
@@ -290,8 +291,31 @@ app.post("/api/chat", async (req, res) => {
     }
 
     await initializeAI();
-    const relevantDocs = await vectorStore.similaritySearch(query);
+
+    const comprehensiveKeywords = [
+      "exam",
+      "test ",
+      "quiz ",
+      "whole pdf",
+      "entire document",
+      "complete document",
+      "summarize everything",
+      "all topics",
+      "comprehensive",
+      "all chapters",
+      "all lessons",
+      "full content",
+    ];
+
+    const isComprehensiveQuery = comprehensiveKeywords.some((keyword) =>
+      query.toLowerCase().includes(keyword.toLowerCase())
+    );
+
+    const chunkCount = isComprehensiveQuery ? 100 : 20;
+    const relevantDocs = await vectorStore.similaritySearch(query, chunkCount);
     const context = relevantDocs.map((doc) => doc.pageContent).join("\n\n");
+
+
     const prompt = `
       You are an intelligent, helpful, and context-aware AI assistant that answers user questions using only the content retrieved from a PDF document. This document has been parsed and chunked, with each chunk associated with its corresponding page number.
 
@@ -299,6 +323,20 @@ app.post("/api/chat", async (req, res) => {
       1. Accurately answer the user's question based solely on the given context.
       2. Cite page numbers wherever relevant to help the user locate the exact source.
       3. Avoid speculation or generating information not found in the context.
+      
+      ${
+        isComprehensiveQuery
+          ? `
+      SPECIAL INSTRUCTIONS FOR COMPREHENSIVE QUERIES:
+      - The user is asking for comprehensive analysis (exam questions, full summary, etc.)
+      - You have access to extensive content from the document
+      - Create detailed, thoughtful responses that utilize the full scope of available content
+      - For exam questions: Create challenging questions that test deep understanding of multiple concepts
+      - Draw connections between different sections and topics
+      `
+          : ""
+      }
+      
       - Only use the information present in the "Context" section.
       - If the context contains multiple relevant pieces from different pages, synthesize them into a coherent answer and cite all relevant page numbers.
       - If the answer is **not** in the provided context, respond with:
@@ -307,7 +345,9 @@ app.post("/api/chat", async (req, res) => {
       - Use a professional and informative tone in all answers.
       - Mention "See page X" to explicitly direct users to the document for more details.
 
-      Context retrieved from the PDF (may include content from one or more pages):
+      Context retrieved from the PDF (${
+        relevantDocs.length
+      } chunks from multiple pages):
       ${context}
       Question:
       ${query}
