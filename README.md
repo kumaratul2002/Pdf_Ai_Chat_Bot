@@ -1,4 +1,10 @@
-PDF Chat Bot
+RAG BASED PDF Chat Bot
+**Backend** : Node.js ,Express.js ,LangChain , Google Gemini AI, Multer
+**Frontend** : React.js ,TailwindCSS ,Axios 
+**Database** : QdrantDB - Vector database running in Docker
+
+
+
 
 1. Clone and Install
 npm install
